@@ -20,6 +20,9 @@ export async function handleUserQuery(req, res) {
     if (!sql) {
       return res.status(400).json({ error: 'Could not generate a valid SQL query.' });
     }
+      // ✅ Add logging here
+  console.log(`🧠 Question: ${question}`);
+  console.log(`📄 Generated SQL: ${sql}`);
 
     // 3. Run SQL on your PostgreSQL database
     const result = await pool.query(sql);
