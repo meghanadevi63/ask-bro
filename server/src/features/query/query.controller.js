@@ -1,45 +1,54 @@
-import { processQuestion } from './query.service.js';
+// src/query/query.controller.js
+import { processQuestion, executeSQL, generateAnswerFromResults } from './query.service.js';
 import { fetchMetadata } from '../metadata/metadata.service.js';
-import pool from '../../db.js';
 
-export async function handleUserQuery(req, res) {
+export async function handleQueryRequest(req, res) {
+  console.log("Received query request:", req.body);
+
   const { question } = req.body;
+  console.log("Extracted question:", question);
 
   if (!question || typeof question !== 'string') {
-    return res.status(400).json({ error: 'Invalid question format' });
+    console.error("Invalid question format:", question);
+    return res.status(400).json({ error: 'Question is required as a string.' });
   }
 
   try {
-    // 1. Get metadata
+    console.log("Fetching metadata...");
     const metadata = await fetchMetadata();
+    console.log("Fetched metadata:", metadata);
 
-    // 2. Ask Gemini to generate SQL & response
-    const aiResponse = await processQuestion(question, metadata);
-    const { sql, response, chart } = aiResponse;
+    // Step 1: Generate SQL from question
+    console.log("Processing question to generate SQL...");
+    const sqlQuery = await processQuestion(question, metadata);
+    console.log("Generated SQL query:", sqlQuery);
 
-    if (!sql) {
-      return res.status(400).json({ error: 'Could not generate a valid SQL query.' });
+    // Step 2: Execute SQL on PostgreSQL
+    console.log("Executing SQL query...");
+    let rows;
+    try {
+      rows = await executeSQL(sqlQuery);
+      console.log("SQL execution results:", rows);
+    } catch (executionError) {
+      console.error("Error executing SQL query:", executionError);
+      console.log("Retrying to process question to generate SQL...");
+      const retrySqlQuery = await processQuestion(question, metadata);
+      console.log("Retry generated SQL query:", retrySqlQuery);
+      rows = await executeSQL(retrySqlQuery);
+      console.log("SQL execution results after retry:", rows);
     }
-      // ✅ Add logging here
-  console.log(`🧠 Question: ${question}`);
-  console.log(`📄 Generated SQL: ${sql}`);
 
-    // 3. Run SQL on your PostgreSQL database
-    const result = await pool.query(sql);
+    // Step 3: Generate natural language + visualizations JSON from results
+    console.log("Generating answer JSON from results...");
+    const answerJson = await generateAnswerFromResults(sqlQuery, rows);
+    console.log("Generated answer JSON:", answerJson);
 
-    // 4. Format table data
-    const table = result.rows;
+    // Step 4: Send JSON response to frontend
+    console.log("Sending response to frontend...");
+    res.json(answerJson);
 
-    res.json({
-      response,
-      chart: chart || { type: 'none', labels: [], values: [] },
-      table
-    });
-
-  } catch (err) {
-    console.error('Error in /api/query:', err.message);
-    res.status(500).json({
-      error: 'Unable to process the question. Please rephrase or check logs.'
-    });
+  } catch (error) {
+    console.error("Error occurred during query handling:", error);
+    res.status(500).json({ error: error.message });
   }
 }
