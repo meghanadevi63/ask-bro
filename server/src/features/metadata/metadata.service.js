@@ -24,5 +24,30 @@ export async function fetchMetadata() {
     columns[table] = colRes.rows.map(col => col.column_name);
   }
 
-  return { tables, columns };
+  // Step 3: Add human-readable descriptions for Gemini understanding
+  const columnDescriptions = {
+    table_a: {
+      col1: "student id",
+      col2: "name",
+      col3: "hall ticket",
+      col4: "date of birth",
+      col5: "gender (Male/Female)"
+    },
+    table_b: {
+      col1: "student id",
+      col15: "e1sem1 marks",
+      col16: "e1sem2 marks",
+      col17: "e2sem1 marks"
+    },
+    table_c: {
+      col1: "student id",
+      col8: "father name",
+      col9: "mother name",
+      col10: "address",
+      col11: "branch",
+      col18: "batch (R20, R21)"
+    }
+  };
+
+  return { tables, columns, columnDescriptions };
 }
