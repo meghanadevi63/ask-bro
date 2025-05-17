@@ -1,3 +1,4 @@
+// features/query/query.service.js
 import { askGemini } from '../../utils/geminiClient.js';
 import pool from '../../db.js';
 
@@ -5,28 +6,28 @@ export async function processQuestion(question, metadata) {
   console.log('processQuestion called with:', { question, metadata });
 
   const prompt = `
-  You are Linga, a highly experienced PostgreSQL SQL query generator. You help users ask complex questions on a database with the following challenges:
-  - The schema is unreliable, with columns named col1 to col18.
-  - Data is messy, with nulls, inconsistent types, and malformed values.
-  - Metadata is provided and must be strictly followed.
+    You are Linga, a highly experienced PostgreSQL SQL query generator. You help users ask complex questions on a database with the following challenges:
+    - The schema is unreliable, with columns named col1 to col18.
+    - Data is messy, with nulls, inconsistent types, and malformed values.
+    - Metadata is provided and must be strictly followed.
 
-  Your task:
-  1. Understand the user's natural language question and generate a valid PostgreSQL SQL query.
-  2. Use ONLY the column names from the metadata provided below.
-  3. Handle complex relationships, joins, aggregations, and filtering in the data.
-  4. Handle dirty data gracefully using functions like NULLIF, COALESCE, or TRY_CAST.
-  5. Ensure the SQL query is safe, robust, and executable without errors.
-  6. If using UNION or UNION ALL, ensure that all queries have the same number of columns and compatible data types.
-  7. If the question is unclear or unrelated to the database, return:
-     SELECT 'I am here to help. Please ask a student-related question.' AS message;
+    Your task:
+    1. Understand the user's natural language question and generate a valid PostgreSQL SQL query.
+    2. Use ONLY the column names from the metadata provided below.
+    3. If the question includes terms like "rank," "top," or "best," dynamically calculate ranks using SQL functions like RANK() or DENSE_RANK().
+    4. If the question includes a specific name (e.g., "C V Charan"), treat it as a potential value in the schema. First, identify the most relevant column(s) where this value might exist (e.g., "Name") based on the metadata. Then, generate a SQL query to fetch the relevant data.
+    5. Ensure the SQL query is safe, robust, and executable without errors.
+    6. Handle dirty data gracefully using functions like NULLIF, COALESCE, or TRY_CAST.
+    7. If the necessary data is unavailable, return:
+       SELECT 'I am unable to determine the answer because the necessary data is unavailable.' AS message;
 
-  Metadata:
-  ${JSON.stringify(metadata, null, 2)}
+    Metadata:
+    ${JSON.stringify(metadata, null, 2)}
 
-  Question: "${question}"
+    Question: "${question}"
 
-  Respond ONLY with the SQL query. Do not include explanations, markdown, or extra text.
-`;
+    Respond ONLY with the SQL query. Do not include explanations, markdown, or extra text.
+  `;
 
   console.log('Generated prompt for Gemini:', prompt);
 
@@ -77,6 +78,7 @@ export async function generateAnswerFromResults(sqlQuery, rows, question) {
     - If applicable, include a visualization description as JSON, including type (e.g., pie, bar, line), labels, and values.
     - Ensure the response is user-friendly and avoids technical jargon.
     - Return ONLY a valid JSON object (no explanations, no markdown):
+      If asked dynamic resulets like "top 10", "best", "rank", etc., include a "visualizations" field with the chart type, labels, and values. and you can calculate it using the feidls which have the marks like e1sem1 , e2sem2 , e3sem3 you can caluclate it and give the results rank
 
     {
       "content": "string, the natural language answer to the user's question",
