@@ -44,7 +44,17 @@ export async function fetchMetadata() {
       "col8": "Father’s name (e.g., POSA SUBBARAYUDU).",
       "col9": "Mother’s name (e.g., manjula). May be null.",
       "col10": "Address (e.g., H.No 7&2-40/8/1, Subhash Nagar, Sircilla, Telangana). May be null.",
-      "col11": "Branch name. Possible values (case and format may vary): 'Computer Science and Engineering (CSE)', 'Electronics and Communication Engineering (ECE)', 'Electrical Engineering (EEE)', 'Mechanical Engineering', 'Metallurgy Engineering (MME)', 'Civil Engineering (CE)', 'Chemical Engineering (CHE)'.",
+      "col11": `Student's academic branch or department. Data is inconsistent and may appear in various formats, abbreviations, or full forms, including:
+    - 'CS', 'Computer Science and Engineering'
+    - 'EC', 'Electronics and Communication Engineering'
+    - 'ME', 'Mechanical Engineering'
+    - 'CH', 'Chemical Engineering'
+    - 'MM', 'Metallurgical and Materials Engineering'
+    - 'CE', 'Civil Engineering'
+    - 'EEE', 'Electrical and Electronics Engineering'
+    - 'EE' (may also refer to Electrical Engineering)
+    - Some entries may contain unexpected values like 'LEFT RKV'
+      Branch names may be in upper/lower case, abbreviated, misspelled, or use non-standard formats. Use UPPER(col11) and compare loosely with standardized names or mappings. Always handle nulls and unexpected entries safely.`,
       "col18": "Batch code (e.g., R20, R21). May appear in different cases like r20, r21."
     }
   }

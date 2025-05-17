@@ -1,4 +1,3 @@
-// filepath: [query.service.js](http://_vscodecontentref_/1)
 import { askGemini } from '../../utils/geminiClient.js';
 import pool from '../../db.js';
 
@@ -6,38 +5,28 @@ export async function processQuestion(question, metadata) {
   console.log('processQuestion called with:', { question, metadata });
 
   const prompt = `
-  You are an expert PostgreSQL assistant working with a very messy, inconsistent, and unreliable database.
-  
-  Important constraints you must follow exactly:
-  
-  1. Only use the exact column and table names provided in the metadata below. Never invent or assume names.
-  2. Every column used in math (like a + b) must be wrapped in \`CAST(column AS NUMERIC)\` — even if you *think* it's numeric.
-  3. Every \`COALESCE\` call must cast all values to the same type (e.g. \`COALESCE(CAST(col1 AS TEXT), 'default')\`).
-  4. Always filter out NULLs where relevant, especially in WHERE, JOIN, GROUP BY, and ORDER BY clauses.
-  5. Do NOT assume column types. Always cast when you're unsure or using comparisons, sorting, math, or filters.
-  6. Use LEFT JOIN unless it's 100% safe to assume both sides exist.
-  7. Avoid ambiguous functions or PostgreSQL-specific extensions.
-  8. Return ONLY a raw SQL string, with no backticks, markdown, or explanations. Do NOT wrap the SQL in \`\`\` or any quotes.
-  
-  Example of correct style:
-  SELECT CAST(col1 AS NUMERIC) + CAST(col2 AS NUMERIC) AS total
-  FROM table_x
-  WHERE col3 IS NOT NULL;
-  
-  Metadata (describes tables, columns, and meanings):
-  ${JSON.stringify(metadata)}
-  
-  User Question:
-  "${question}"
-  
-  Your only task is to generate a safe, executable, PostgreSQL-compatible SQL query that answers this question based on the metadata.
-  Return just the SQL query string. Nothing else.
+  You are Linga, a highly experienced PostgreSQL SQL query generator. You help users ask complex questions on a database with the following challenges:
+  - The schema is unreliable, with columns named col1 to col18.
+  - Data is messy, with nulls, inconsistent types, and malformed values.
+  - Metadata is provided and must be strictly followed.
 
-  I am getting lots errors while running the SQL query. Please make sure to follow the constraints strictly.
-  `;
-  
-  
-  
+  Your task:
+  1. Understand the user's natural language question and generate a valid PostgreSQL SQL query.
+  2. Use ONLY the column names from the metadata provided below.
+  3. Handle complex relationships, joins, aggregations, and filtering in the data.
+  4. Handle dirty data gracefully using functions like NULLIF, COALESCE, or TRY_CAST.
+  5. Ensure the SQL query is safe, robust, and executable without errors.
+  6. If using UNION or UNION ALL, ensure that all queries have the same number of columns and compatible data types.
+  7. If the question is unclear or unrelated to the database, return:
+     SELECT 'I am here to help. Please ask a student-related question.' AS message;
+
+  Metadata:
+  ${JSON.stringify(metadata, null, 2)}
+
+  Question: "${question}"
+
+  Respond ONLY with the SQL query. Do not include explanations, markdown, or extra text.
+`;
 
   console.log('Generated prompt for Gemini:', prompt);
 
@@ -74,33 +63,36 @@ export async function executeSQL(sqlQuery) {
   }
 }
 
-export async function generateAnswerFromResults(sqlQuery, rows) {
-  console.log('generateAnswerFromResults called with:', { sqlQuery, rows });
+export async function generateAnswerFromResults(sqlQuery, rows, question) {
+  console.log('generateAnswerFromResults called with:', { sqlQuery, rows, question });
 
   const prompt = `
-    You are a data analyst assistant.
+    You are Linga, a 21-year-old data analyst assistant.
 
-    Given the SQL query:
-    ${sqlQuery}
-
-    And its result in JSON format:
-    ${JSON.stringify(rows)}
-
-    Your task is:
-    - Generate a concise, accurate natural language answer explaining the output.
-    - Provide an appropriate visualization description as JSON, including type (e.g., pie, bar), labels, and values.
+    Your task:
+    - Answer the user's question in a concise and accurate manner based on the data provided.
+    - Do NOT mention the SQL query, schema, or where the information is coming from.
+    - Focus only on providing a clear and helpful response to the user's question.
+    - Handle complex relationships, aggregations, and comparisons in the data.
+    - If applicable, include a visualization description as JSON, including type (e.g., pie, bar, line), labels, and values.
+    - Ensure the response is user-friendly and avoids technical jargon.
     - Return ONLY a valid JSON object (no explanations, no markdown):
 
     {
-      "content": "string, the natural language answer",
+      "content": "string, the natural language answer to the user's question",
       "visualizations": {
         "type": "chart type",
         "labels": [...],
         "values": [...]
       },
       "data": [...],  // optional tabular data, can be the rows or subset
-      "sql": "${sqlQuery}"
+      "question": "${question}"
     }
+
+    User's Question: "${question}"
+
+    Data:
+    ${JSON.stringify(rows, null, 2)}
   `;
 
   console.log('Generated prompt for Gemini:', prompt);

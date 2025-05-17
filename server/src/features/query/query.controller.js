@@ -40,7 +40,7 @@ export async function handleQueryRequest(req, res) {
 
     // Step 3: Generate natural language + visualizations JSON from results
     console.log("Generating answer JSON from results...");
-    const answerJson = await generateAnswerFromResults(sqlQuery, rows);
+    const answerJson = await generateAnswerFromResults(sqlQuery, rows , question);
     console.log("Generated answer JSON:", answerJson);
 
     // Step 4: Send JSON response to frontend
