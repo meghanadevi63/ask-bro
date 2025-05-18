@@ -1,11 +1,12 @@
 // src/query/query.controller.js
 import { processQuestion, executeSQL, generateAnswerFromResults } from './query.service.js';
 import { fetchMetadata } from '../metadata/metadata.service.js';
+import { logQuery, getQueryHistory } from '../logging/logging.service.js';
 
 export async function handleQueryRequest(req, res) {
   console.log("Received query request:", req.body);
 
-  const { question } = req.body;
+  const { question, conversationId } = req.body;
   console.log("Extracted question:", question);
 
   if (!question || typeof question !== 'string') {
@@ -16,19 +17,29 @@ export async function handleQueryRequest(req, res) {
   try {
     console.log("Fetching metadata...");
     const metadata = await fetchMetadata();
-    console.log("Fetched metadata:", metadata);
+    console.log("Metadata fetched successfully");
 
+    // Get conversation history if available
+    const conversationHistory = conversationId ? 
+      await getQueryHistory(conversationId, 5) : // Get last 5 exchanges
+      [];
+    
     // Step 1: Generate SQL from question
     console.log("Processing question to generate SQL...");
     let sqlQuery;
     try {
-      sqlQuery = await processQuestion(question, metadata);
+      sqlQuery = await processQuestion(question, metadata, conversationHistory);
       console.log("Generated SQL query:", sqlQuery);
     } catch (sqlGenerationError) {
       console.error("Error generating SQL:", sqlGenerationError);
-      return res.status(500).json({ 
+      
+      // Return a friendly error message
+      return res.status(200).json({ 
         error: 'Failed to generate SQL query',
-        content: "I couldn't understand how to query the database for your question. Could you please rephrase it?"
+        content: "I'm not sure how to answer that question with the data I have. Could you please rephrase it or provide more details about what you're looking for?",
+        sql: null,
+        data: null,
+        visualizations: null
       });
     }
 
@@ -37,7 +48,7 @@ export async function handleQueryRequest(req, res) {
     let rows;
     try {
       rows = await executeSQL(sqlQuery);
-      console.log("SQL execution results:", rows);
+      console.log(`SQL execution results: ${rows.length} rows returned`);
     } catch (executionError) {
       console.error("Error executing SQL query:", executionError);
       
@@ -46,15 +57,21 @@ export async function handleQueryRequest(req, res) {
       try {
         // Add a retry hint to the question
         const retryQuestion = `${question} (Please generate a simpler query focusing on exact matches only)`;
-        const retrySqlQuery = await processQuestion(retryQuestion, metadata);
+        const retrySqlQuery = await processQuestion(retryQuestion, metadata, conversationHistory);
         console.log("Retry generated SQL query:", retrySqlQuery);
         rows = await executeSQL(retrySqlQuery);
-        console.log("SQL execution results after retry:", rows);
+        sqlQuery = retrySqlQuery; // Update the SQL query to the successful one
+        console.log(`SQL execution results after retry: ${rows.length} rows returned`);
       } catch (retryError) {
         console.error("Error on retry execution:", retryError);
-        return res.status(500).json({ 
+        
+        // Return a friendly error message
+        return res.status(200).json({ 
           error: 'Failed to execute SQL query',
-          content: "I understood your question, but couldn't retrieve the data due to schema complexity. Could you ask about a specific aspect or provide more details?"
+          content: "I understand what you're asking, but I'm having trouble retrieving that specific information. Could you try asking about a different aspect or provide more details?",
+          sql: sqlQuery,
+          data: null,
+          visualizations: null
         });
       }
     }
@@ -62,17 +79,49 @@ export async function handleQueryRequest(req, res) {
     // Step 3: Generate natural language + visualizations JSON from results
     console.log("Generating answer JSON from results...");
     const answerJson = await generateAnswerFromResults(sqlQuery, rows, question);
-    console.log("Generated answer JSON:", answerJson);
+    console.log("Answer JSON generated successfully");
+
+    // Log the successful query
+    if (conversationId) {
+      await logQuery({
+        conversationId,
+        question,
+        sqlQuery,
+        result: rows.length > 0 ? 'success' : 'no_data',
+        timestamp: new Date()
+      });
+    }
 
     // Step 4: Send JSON response to frontend
     console.log("Sending response to frontend...");
-    res.json(answerJson);
+    res.json({
+      ...answerJson,
+      sql: sqlQuery,
+      error: null
+    });
 
   } catch (error) {
     console.error("Error occurred during query handling:", error);
-    res.status(500).json({ 
+    
+    // Return a friendly error message
+    res.status(200).json({ 
       error: error.message,
-      content: "I encountered an error while processing your question. Please try a different question or provide more specific details."
+      content: "I ran into a problem while processing your question. Could you try asking something else?",
+      sql: null,
+      data: null,
+      visualizations: null
     });
+  }
+}
+
+// comment is added to handle conversation start
+
+export async function handleConversationStart(req, res) {
+  try {
+    const conversationId = Date.now().toString();
+    res.json({ conversationId });
+  } catch (error) {
+    console.error("Error starting conversation:", error);
+    res.status(500).json({ error: error.message });
   }
 }

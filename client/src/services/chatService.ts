@@ -1,4 +1,3 @@
-import { Message } from '../types/chat';
 import { VisualizationData, TableData } from '../types/visualization';
 
 // Sample data for demonstration (in a real app, this would come from the API)
@@ -289,7 +288,6 @@ interface ResponseData {
 // In a real application, this would call the backend API
 export const generateResponse = async (
   query: string,
-  previousMessages: Message[]
 ): Promise<ResponseData> => {
   // Simulate API call delay
   await new Promise(resolve => setTimeout(resolve, 1500));

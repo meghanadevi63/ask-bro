@@ -16,6 +16,7 @@ export async function fetchMetadata() {
     // Step 2: Get columns for each table with data types
     const columns = {};
     const sampleData = {};
+    const statistics = {};
 
     for (const table of tables) {
       // Get column information
@@ -38,6 +39,29 @@ export async function fetchMetadata() {
           SELECT * FROM ${table} LIMIT 5;
         `);
         sampleData[table] = sampleRes.rows;
+        
+        // Get basic statistics for numeric columns
+        for (const col of columns[table]) {
+          if (['integer', 'numeric', 'real', 'double precision'].includes(col.type)) {
+            try {
+              const statsRes = await pool.query(`
+                SELECT 
+                  MIN(${col.name}::numeric) as min_value,
+                  MAX(${col.name}::numeric) as max_value,
+                  AVG(${col.name}::numeric) as avg_value,
+                  COUNT(${col.name}) as count,
+                  COUNT(*) as total_count
+                FROM ${table}
+                WHERE ${col.name} IS NOT NULL AND ${col.name}::text ~ '^[0-9]+(\.[0-9]+)?$';
+              `);
+              
+              if (!statistics[table]) statistics[table] = {};
+              statistics[table][col.name] = statsRes.rows[0];
+            } catch (e) {
+              console.error(`Error fetching statistics for ${table}.${col.name}:`, e.message);
+            }
+          }
+        }
       } catch (e) {
         console.error(`Error fetching sample data for table ${table}:`, e.message);
         sampleData[table] = [];
@@ -105,7 +129,7 @@ export async function fetchMetadata() {
       },
       {
         "purpose": "Finding students by department",
-        "pattern": "UPPER(table_c.col11) LIKE '%COMPUTER%' OR UPPER(table_c.col11) LIKE '%CS%'"
+        "pattern": "UPPER(table_c.col11) LIKE ANY(ARRAY['%COMPUTER%', '%CS%', '%CSE%'])"
       },
       {
         "purpose": "Calculating GPA",
@@ -114,17 +138,107 @@ export async function fetchMetadata() {
       {
         "purpose": "Handling student IDs",
         "pattern": "UPPER(table_a.col1) LIKE 'R2%'"
+      },
+      {
+        "purpose": "Ranking students by GPA",
+        "pattern": "RANK() OVER (PARTITION BY UPPER(table_c.col11), UPPER(table_c.col18) ORDER BY (COALESCE(NULLIF(table_b.col15, '')::NUMERIC, 0) + COALESCE(NULLIF(table_b.col16, '')::NUMERIC, 0) + COALESCE(NULLIF(table_b.col17, '')::NUMERIC, 0)) DESC)"
+      },
+      {
+        "purpose": "Standardizing branch names",
+        "pattern": `CASE 
+          WHEN UPPER(table_c.col11) LIKE ANY(ARRAY['%COMPUTER%', '%CS%', '%CSE%']) THEN 'Computer Science and Engineering'
+          WHEN UPPER(table_c.col11) LIKE ANY(ARRAY['%ELECTRONICS%', '%EC%', '%ECE%']) THEN 'Electronics and Communication Engineering'
+          WHEN UPPER(table_c.col11) LIKE ANY(ARRAY['%ELECTRICAL%', '%EE%', '%EEE%']) THEN 'Electrical and Electronics Engineering'
+          WHEN UPPER(table_c.col11) LIKE ANY(ARRAY['%MECHANICAL%', '%ME%', '%MECH%']) THEN 'Mechanical Engineering'
+          WHEN UPPER(table_c.col11) LIKE ANY(ARRAY['%CHEMICAL%', '%CH%', '%CHEM%']) THEN 'Chemical Engineering'
+          WHEN UPPER(table_c.col11) LIKE ANY(ARRAY['%CIVIL%', '%CE%', '%CIV%']) THEN 'Civil Engineering'
+          WHEN UPPER(table_c.col11) LIKE ANY(ARRAY['%METALLURGICAL%', '%MM%', '%MME%']) THEN 'Metallurgical and Materials Engineering'
+          ELSE COALESCE(table_c.col11, 'Unknown')
+        END`
+      },
+      {
+        "purpose": "Standardizing batch codes",
+        "pattern": "UPPER(SUBSTRING(table_c.col18 FROM '([Rr][0-9]+)'))"
       }
     ];
+
+    // Step 6: Add domain-specific knowledge
+    const domainKnowledge = {
+      "branches": {
+        "CSE": {
+          "fullName": "Computer Science and Engineering",
+          "variations": ["CS", "CSE", "Computer Science", "Computer Science and Engineering", "COMPUTER SCIENCE"],
+          "totalStudents": 363
+        },
+        "ECE": {
+          "fullName": "Electronics and Communication Engineering",
+          "variations": ["EC", "ECE", "Electronics", "Electronics and Communication", "Electronics and Communication Engineering"],
+          "totalStudents": 363
+        },
+        "EEE": {
+          "fullName": "Electrical and Electronics Engineering",
+          "variations": ["EE", "EEE", "Electrical", "Electrical Engineering", "Electrical and Electronics", "Electrical and Electronics Engineering"],
+          "totalStudents": 120
+        },
+        "MECH": {
+          "fullName": "Mechanical Engineering",
+          "variations": ["ME", "MECH", "Mechanical", "Mechanical Engineering"],
+          "totalStudents": null // Unknown exact count
+        },
+        "CHEM": {
+          "fullName": "Chemical Engineering",
+          "variations": ["CH", "CHEM", "Chemical", "Chemical Engineering"],
+          "totalStudents": null // Unknown exact count
+        },
+        "CIVIL": {
+          "fullName": "Civil Engineering",
+          "variations": ["CE", "CIV", "Civil", "Civil Engineering"],
+          "totalStudents": null // Unknown exact count
+        },
+        "MME": {
+          "fullName": "Metallurgical and Materials Engineering",
+          "variations": ["MM", "MME", "Metallurgical", "Metallurgical and Materials Engineering"],
+          "totalStudents": null // Unknown exact count
+        }
+      },
+      "batches": {
+        "R20": {
+          "yearJoined": 2020,
+          "variations": ["R20", "r20", "R-20", "r-20", "2020"],
+          "totalStudents": 1200
+        },
+        "R21": {
+          "yearJoined": 2021,
+          "variations": ["R21", "r21", "R-21", "r-21", "2021"],
+          "totalStudents": 1200
+        }
+      },
+      "semesters": {
+        "E1sem1": {
+          "fullName": "Engineering First Year Semester 1",
+          "columnName": "col15"
+        },
+        "E1sem2": {
+          "fullName": "Engineering First Year Semester 2",
+          "columnName": "col16"
+        },
+        "E2sem1": {
+          "fullName": "Engineering Second Year Semester 1",
+          "columnName": "col17"
+        }
+      }
+    };
   
-    // Step 6: Return enhanced metadata
+    // Step 7: Return enhanced metadata
     return { 
       tables, 
       columns, 
       columnDescriptions,
       tableRelationships,
       commonQueryPatterns,
-      sampleData
+      domainKnowledge,
+      sampleData,
+      statistics
     };
   } catch (error) {
     console.error("Error fetching metadata:", error);

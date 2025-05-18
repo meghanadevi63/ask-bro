@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { Message } from '../types/chat';
-import { generateResponse } from '../services/chatService';
+// import { generateResponse } from '../services/chatService';
+import axios from './../api/apiClient.ts';
 
 interface ChatContextType {
   messages: Message[];
@@ -27,7 +28,10 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     try {
       // Call to API service
-      const response = await generateResponse(content, messages);
+      // {content: sampleResponses[topic],visualizations: sampleVisualizations[topic],data: sampleTables[topic],sql: sampleSQL[topic]}
+      const res = await axios.post('/api/query', { question: content, messages: [...messages, userMessage] });
+      const response = res.data;
+      // const response = await generateResponse(content, messages);
       
       const aiMessage: Message = {
         role: 'assistant',
