@@ -22,6 +22,9 @@ export async function processQuestion(question, metadata, conversationHistory = 
     - For R20 batch: Use WHERE UPPER(table_c.col18) LIKE '%R20%' OR UPPER(table_c.col18) LIKE '%20%'
     - Join tables using table_a.col1 = table_b.col1 AND table_a.col1 = table_c.col1
     - Handle NULL values with COALESCE(NULLIF(column, '')::NUMERIC, 0)
+
+    you can use these meta data(you need to strictly follow this only) :
+    Metadata: ${metadata} 
     
     Question: "${question}"
     
