@@ -3,7 +3,6 @@ import { askGemini } from '../../utils/geminiClient.js';
 import pool from '../../db.js';
 
 export async function processQuestion(question, metadata, conversationHistory = []) {
-  console.log('processQuestion called with:', { question, conversationHistory: conversationHistory.length });
 
   const prompt = `
     You are a PostgreSQL expert. Generate a SQL query for this IIIT RGUKT RK Valley university database.
@@ -31,34 +30,31 @@ export async function processQuestion(question, metadata, conversationHistory = 
     Respond ONLY with the exact SQL query. No explanations or comments.
   `;
 
-  console.log('Generated prompt for Gemini (length):', prompt.length);
-
-  let sqlQuery = '';
   try {
-    sqlQuery = await askGemini(prompt);
-    sqlQuery = sqlQuery.replace(/``````/g, '').trim();
+    const sqlQuery = await askGemini(prompt);
+    
+    const cleanedQuery = sqlQuery.replace(/```(?:sql)?|```/g, '').trim();
     console.log('Received SQL query from Gemini:', sqlQuery);
-    
-    // If the query is empty or doesn't start with expected SQL keywords, generate a default query
-    if (!sqlQuery || !/^(SELECT|WITH|EXPLAIN)/i.test(sqlQuery)) {
+
+
+    if (!cleanedQuery || !/^(SELECT|WITH|EXPLAIN)/i.test(cleanedQuery)) {
       console.log('Invalid SQL generated, using default query');
-      sqlQuery = generateDefaultQuery(question);
+      return generateDefaultQuery(question);
     }
-    
-    return sqlQuery;
+
+    console.log('Received SQL query from Gemini:', cleanedQuery);
+    return cleanedQuery;
   } catch (e) {
     console.error('Error while getting SQL from Gemini:', e.message);
     return generateDefaultQuery(question);
   }
 }
 
-// Function to generate a default query when Gemini fails
 function generateDefaultQuery(question) {
-  // Check for common patterns in the question
   const isTopStudentQuery = /top|best|highest|first/i.test(question);
   const isCSEQuery = /cse|computer|cs/i.test(question);
   const isR20Query = /r20|20/i.test(question);
-  
+
   if (isTopStudentQuery && isCSEQuery && isR20Query) {
     return `
       WITH student_marks AS (
@@ -88,8 +84,7 @@ function generateDefaultQuery(question) {
       LIMIT 1;
     `;
   }
-  
-  // Default to a simple query that will at least return something
+
   return `
     SELECT 
       a.col1 AS student_id,
@@ -109,49 +104,23 @@ function generateDefaultQuery(question) {
   `;
 }
 
-
-
 export async function executeSQL(sqlQuery) {
-  console.log('executeSQL called with query length:', sqlQuery.length);
 
   try {
-    // Set a longer statement timeout for complex queries (5 minutes)
     await pool.query('SET statement_timeout = 300000');
-    
     const result = await pool.query(sqlQuery);
     console.log('Query executed successfully. Rows returned:', result.rows.length);
-    
-    // Reset statement timeout to default
     await pool.query('SET statement_timeout = 30000');
-    
     return result.rows;
   } catch (e) {
     console.error('Error while executing SQL query:', e.message);
-    
-    // Reset statement timeout to default
-    try {
-      await pool.query('SET statement_timeout = 30000');
-    } catch (resetError) {
-      console.error('Error resetting statement timeout:', resetError.message);
-    }
-    
+    await pool.query('SET statement_timeout = 30000');
     throw new Error('PostgreSQL query failed: ' + e.message);
   }
 }
 
 export async function generateAnswerFromResults(sqlQuery, rows, question) {
-  console.log('generateAnswerFromResults called with:', { sqlQueryLength: sqlQuery.length, rowCount: rows.length, question });
-
-  // Prepare a summary of the data for large result sets
-  let dataSummary = '';
-  if (rows.length > 20) {
-    dataSummary = `
-      The query returned ${rows.length} rows. Here's a summary:
-      - First few rows: ${JSON.stringify(rows.slice(0, 3))}
-      - Last few rows: ${JSON.stringify(rows.slice(-3))}
-      - Columns: ${rows.length > 0 ? Object.keys(rows).join(', ') : 'None'}
-    `;
-  }
+  // console.log('generateAnswerFromResults called with:', { sqlQueryLength: sqlQuery.length, rowCount: rows.length, question });
 
   const prompt = `
     You are Linga, a 21-year-old data analyst assistant at IIIT RGUKT RK Valley.
@@ -190,38 +159,22 @@ export async function generateAnswerFromResults(sqlQuery, rows, question) {
     User's Question: "${question}"
 
     Data:
-    ${rows.length <= 50 ? JSON.stringify(rows, null, 2) : dataSummary}
+    ${rows.length <= 50 ? JSON.stringify(rows, null, 2) : `The query returned ${rows.length} rows. Here's a summary: First few rows: ${JSON.stringify(rows.slice(0, 3))}, Last few rows: ${JSON.stringify(rows.slice(-3))}`}
   `;
 
-  console.log('Generated prompt for Gemini (length):', prompt.length);
-
-  let geminiResponse = '';
   try {
-    geminiResponse = await askGemini(prompt);
-    console.log('Received response from Gemini (length):', geminiResponse.length);
+    const geminiResponse = await askGemini(prompt);
+    console.log('Gemini response:', geminiResponse);
+    const cleanedResponse = geminiResponse.replace(/```(?:json)?|``````json|```/g, '');
 
-    // Clean the response to remove Markdown formatting
-    geminiResponse = geminiResponse.replace(/```(?:json)?|``````json|```/g, '');
-    console.log('Cleaned response from Gemini');
-
-    // Parse the cleaned response as JSON
-    const jsonAnswer = JSON.parse(geminiResponse);
-    console.log('Parsed JSON response from Gemini');
-
-    return jsonAnswer;
+    return JSON.parse(cleanedResponse);
   } catch (e) {
     console.error('Error while processing Gemini response:', e.message);
-    
-    // Fallback to a simpler response if JSON parsing fails
-    try {
-      return {
-        content: "I found some information based on your question, but I'm having trouble formatting it nicely. Here's what I know: " + 
-                (rows.length > 0 ? `I found ${rows.length} records that match your query.` : "I couldn't find any records matching your criteria."),
-        data: rows.slice(0, 20), // Limit to first 20 rows
-        question: question
-      };
-    } catch (fallbackError) {
-      throw new Error('Failed to process Gemini response: ' + e.message);
-    }
+    return {
+      content: "I found some information based on your question, but I'm having trouble formatting it nicely. Here's what I know: " + 
+              (rows.length > 0 ? `I found ${rows.length} records that match your query.` : "I couldn't find any records matching your criteria."),
+      data: rows.slice(0, 20),
+      question: question
+    };
   }
 }
