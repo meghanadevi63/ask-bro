@@ -68,41 +68,30 @@ export async function fetchMetadata() {
       }
     }
 
-    // Step 3: Add human-readable descriptions for Gemini understanding
-    const columnDescriptions = {
-      "table_a": {
-        "col1": "Student ID in the format R200001–R201100 or R210001–R211100. Sometimes lowercase 'r' instead of 'R'. This is the primary identifier for students and links across all tables.",
-        "col2": "Student full name (e.g., POSA VENKATA SIVA SHANKAR). May be in all caps, mixed case, or have inconsistent spacing/formatting.",
-        "col3": "Hall ticket number, usually a 10-digit number (e.g., 2212027156). May appear as a float (e.g., 2212027156.0), be null, or have formatting issues.",
-        "col4": "Date of birth in various inconsistent formats (e.g., '2004-04-09', '2004/04/09', 'May 9 2004', '09-04-2004', etc.). Handle with care using date parsing functions.",
-        "col5": "Gender with possible values like Male, Female, M, F (case-insensitive). May contain nulls or unexpected values."
-      },
-      "table_b": {
-        "col1": "Student ID in the format R200001–R201100 or R210001–R211100. Foreign key linking to table_a.col1. May have case inconsistencies.",
-        "col15": "Marks for E1 Semester 1 on a scale of 0-10 (e.g., 9.352). May be null, missing, or have inconsistent decimal places. For GPA calculations, handle nulls appropriately.",
-        "col16": "Marks for E1 Semester 2 on a scale of 0-10 (e.g., 9.352). May be null, missing, or have inconsistent decimal places. For GPA calculations, handle nulls appropriately.",
-        "col17": "Marks for E2 Semester 1 on a scale of 0-10 (e.g., 9.352). May be null, missing, or have inconsistent decimal places. For GPA calculations, handle nulls appropriately."
-      },
-      "table_c": {
-        "col1": "Student ID in the format R200001–R201100 or R210001–R211100. Foreign key linking to table_a.col1. May have case inconsistencies.",
-        "col8": "Father's name (e.g., POSA SUBBARAYUDU). May have inconsistent capitalization or formatting.",
-        "col9": "Mother's name (e.g., manjula). May be null or have inconsistent capitalization.",
-        "col10": "Address (e.g., H.No 7&2-40/8/1, Subhash Nagar, Sircilla, Telangana). May be null, incomplete, or have inconsistent formatting.",
-        "col11": `Student's academic branch or department. Extremely inconsistent data that may appear in various formats, abbreviations, or full forms, including:
-                - Computer Science variations: 'CS', 'CSE', 'Computer Science', 'Computer Science and Engineering', 'COMPUTER SCIENCE', etc.
-                - Electronics variations: 'EC', 'ECE', 'Electronics', 'Electronics and Communication', 'Electronics and Communication Engineering', etc.
-                - Mechanical variations: 'ME', 'MECH', 'Mechanical', 'Mechanical Engineering', etc.
-                - Chemical variations: 'CH', 'CHEM', 'Chemical', 'Chemical Engineering', etc.
-                - Materials variations: 'MM', 'MME', 'Metallurgical', 'Metallurgical and Materials Engineering', etc.
-                - Civil variations: 'CE', 'CIV', 'Civil', 'Civil Engineering', etc.
-                - Electrical variations: 'EE', 'EEE', 'Electrical', 'Electrical Engineering', 'Electrical and Electronics', 'Electrical and Electronics Engineering', etc.
-                - Some entries may contain unexpected values like 'LEFT RKV', 'DISCONTINUED', etc.
-                Branch names may be in upper/lower case, abbreviated, misspelled, or use non-standard formats. Use UPPER(col11) and compare with multiple patterns using OR conditions and LIKE operators. Always handle nulls and unexpected entries safely.`,
-        "col18": "Batch code (e.g., R20, R21). May appear in different cases like r20, r21, R20, R21. Indicates the student's admission year (2020 for R20, 2021 for R21)."
-      }
-    };
-
-
+  // Step 3: Add human-readable descriptions for Gemini understanding
+  const columnDescriptions = {
+    "table_a": {
+      "col1": "Student ID in the format R200001–R201100 or R210001–R211100. some time it may be r instad of R",
+      "col2": "Student full name (e.g., POSA VENKATA SIVA SHANKAR).",
+      "col3": "Hall ticket number, usually a 10-digit number (e.g., 2212027156). May appear as a float (e.g., 2212027156.0) or be null.",
+      "col4": "Date of birth in any format (e.g., '2004-04-09', '2004/04/09', 'May 9 2004', etc.).",
+      "col5": "Gender with possible values like Male, Female, M, F (case-insensitive)."
+    },
+    "table_b": {
+      "col1": "Student ID in the format R200001–R201100 or R210001–R211100.",
+      "col15": "Marks for E1 Semester 1 (e.g., 9.352 out of 10). May be null or missing.",
+      "col16": "Marks for E1 Semester 2 (e.g., 9.352 out of 10). May be null or missing.",
+      "col17": "Marks for E2 Semester 1 (e.g., 9.352 out of 10). May be null or missing."
+    },
+    "table_c": {
+      "col1": "Student ID in the format R200001–R201100 or R210001–R211100.",
+      "col8": "Father’s name (e.g., POSA SUBBARAYUDU).",
+      "col9": "Mother’s name (e.g., manjula). May be null.",
+      "col10": "Address (e.g., H.No 7&2-40/8/1, Subhash Nagar, Sircilla, Telangana). May be null.",
+      "col11": "Branch name. Possible values (case and format may vary): 'Computer Science and Engineering (CSE)', 'Electronics and Communication Engineering (ECE)', 'Electrical Engineering (EEE)', 'Mechanical Engineering', 'Metallurgy Engineering (MME)', 'Civil Engineering (CE)', 'Chemical Engineering (CHE)'.",
+      "col18": "Batch code (e.g., R20, R21). May appear in different cases like r20, r21."
+    }
+  }
   
     // Step 7: Return enhanced metadata
     return { columns, sampleData, columnDescriptions };
